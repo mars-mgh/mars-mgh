@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "remarkable": {
+      "command": "uvx",
+      "args": ["--from", "remarkable-mcp", "remarkable-mcp", "--read-only"],
+      "env": {
+        "REMARKABLE_TOKEN": "${REMARKABLE_TOKEN}"
+      }
+    }
+  }
+}

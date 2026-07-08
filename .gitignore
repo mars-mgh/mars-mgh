@@ -1,0 +1,10 @@
+# Never commit note content — it flows tablet -> Notion only.
+workdir/
+*.pdf
+*.png
+*.zip
+
+# Local tooling and credentials
+bin/
+rmapi.conf
+__pycache__/
