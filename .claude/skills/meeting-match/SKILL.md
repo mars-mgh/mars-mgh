@@ -15,7 +15,7 @@ public services, or left in files that aren't gitignored.
 
 ```bash
 bash scripts/bootstrap.sh
-python3 scripts/pull_notes.py          # add --all for a full first sync, --limit N to cap
+.venv/bin/python scripts/pull_notes.py          # add --all for a full first sync, --limit N to cap
 ```
 
 - If bootstrap fails on a missing `REMARKABLE_TOKEN`, stop and tell the user to
@@ -82,7 +82,7 @@ Destination: a Notion database named **"reMarkable Meeting Notes"**.
 ## Phase 4 — Finish
 
 ```bash
-python3 scripts/pull_notes.py --mark-done
+.venv/bin/python scripts/pull_notes.py --mark-done
 git add state/state.json && git commit -m "Record processed notebooks" && git push -u origin <current branch>
 ```
 

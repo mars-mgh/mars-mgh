@@ -8,3 +8,4 @@ workdir/
 bin/
 rmapi.conf
 __pycache__/
+.venv/

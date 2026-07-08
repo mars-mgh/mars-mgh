@@ -12,9 +12,9 @@ Invoke the `meeting-match` skill (it contains the full procedure), or manually:
 
 ```bash
 bash scripts/bootstrap.sh        # install rmapi + write auth config from $REMARKABLE_TOKEN
-python3 scripts/pull_notes.py    # pull changed notebooks, render pages to workdir/
+.venv/bin/python scripts/pull_notes.py    # pull changed notebooks, render pages to workdir/
 # ... transcribe/match/file (see .claude/skills/meeting-match/SKILL.md) ...
-python3 scripts/pull_notes.py --mark-done   # then commit state/state.json
+.venv/bin/python scripts/pull_notes.py --mark-done   # then commit state/state.json
 ```
 
 `.mcp.json` also loads the `remarkable` MCP server (remarkable-mcp) for ad-hoc

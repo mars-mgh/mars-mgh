@@ -26,6 +26,12 @@ if ! command -v rmapi >/dev/null 2>&1 && [ ! -x "$RMAPI" ]; then
   echo "rmapi installed at $RMAPI"
 fi
 
+if [ ! -x "$REPO_DIR/.venv/bin/python" ]; then
+  echo "Creating pipeline venv..."
+  uv venv "$REPO_DIR/.venv" --quiet
+  uv pip install --python "$REPO_DIR/.venv/bin/python" --quiet remarkable-mcp pymupdf
+fi
+
 CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/rmapi"
 CONF="$CONF_DIR/rmapi.conf"
 if [ ! -s "$CONF" ]; then

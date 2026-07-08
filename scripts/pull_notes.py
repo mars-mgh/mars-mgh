@@ -40,9 +40,17 @@ def rmapi_bin() -> str:
     sys.exit("rmapi not found — run scripts/bootstrap.sh first")
 
 
+def rmapi_env() -> dict:
+    # Pin the config path: a stray legacy ~/.rmapi (e.g. written by an
+    # unauthenticated remarkable-mcp) would otherwise take precedence.
+    conf = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "rmapi" / "rmapi.conf"
+    return {**os.environ, "RMAPI_CONFIG": str(conf)}
+
+
 def run_rmapi(args: list[str], cwd: Path | None = None) -> str:
     cmd = [rmapi_bin(), "-ni"] + args
-    proc = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, timeout=600)
+    proc = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd,
+                          timeout=600, env=rmapi_env())
     if proc.returncode != 0:
         raise RuntimeError(f"rmapi {' '.join(args)} failed:\n{proc.stderr or proc.stdout}")
     return proc.stdout
@@ -52,7 +60,7 @@ def list_documents() -> list[dict]:
     """Return all cloud entries (docs + folders) with id/name/type/parent/modifiedClient."""
     out = subprocess.run(
         [rmapi_bin(), "-ni", "-json", "find", "/"],
-        capture_output=True, text=True, timeout=600,
+        capture_output=True, text=True, timeout=600, env=rmapi_env(),
     )
     if out.returncode != 0:
         raise RuntimeError(f"rmapi find failed:\n{out.stderr or out.stdout}")
@@ -77,7 +85,7 @@ def build_paths(entries: list[dict]) -> dict[str, str]:
             parts.append(cur["name"])
             parent = cur.get("parent") or ""
             cur = by_id.get(parent)
-        return "/" + "/".join(reversed(parts))
+        return re.sub("/+", "/", "/" + "/".join(reversed(parts)))
 
     return {e["id"]: path_of(e["id"]) for e in entries}
 
@@ -118,6 +126,42 @@ def render_pdf(pdf: Path, out_dir: Path) -> list[str]:
     return pages
 
 
+def fetch_and_render(doc_path: str, doc_dir: Path) -> tuple[list[str], str]:
+    """Download a document archive and render its pages to PNGs.
+
+    Handwritten pages (.rm, format v6 incl. Paper Pro) are rendered with
+    remarkable_mcp's renderer; PDF/EPUB underlays fall back to pymupdf.
+    Returns (page image paths, document kind).
+    """
+    import zipfile
+
+    from remarkable_mcp.extract import _get_ordered_rm_files, render_rm_file_to_png
+
+    run_rmapi(["get", doc_path], cwd=doc_dir)
+    zips = list(doc_dir.glob("*.rmdoc")) + list(doc_dir.glob("*.zip"))
+    if not zips:
+        raise RuntimeError("rmapi get produced no archive")
+    archive = doc_dir / "archive"
+    with zipfile.ZipFile(zips[0]) as zf:
+        zf.extractall(archive)
+
+    rm_files = _get_ordered_rm_files(archive)
+    pages = []
+    if rm_files:
+        for i, rm in enumerate(rm_files[:MAX_PAGES_PER_DOC]):
+            png_bytes = render_rm_file_to_png(rm, background_color="#FFFFFF")
+            if png_bytes:
+                png = doc_dir / f"page-{i + 1:03d}.png"
+                png.write_bytes(png_bytes)
+                pages.append(str(png.relative_to(REPO)))
+        return pages, "notebook"
+
+    pdfs = list(archive.glob("*.pdf"))
+    if pdfs:
+        return render_pdf(pdfs[0], doc_dir), "pdf"
+    raise RuntimeError("archive has no .rm pages and no PDF underlay")
+
+
 def pull(args) -> None:
     entries = list_documents()
     by_id = {e["id"]: e for e in entries}
@@ -146,19 +190,15 @@ def pull(args) -> None:
         doc_dir = WORKDIR / f"{safe_name(doc['name'])}-{doc['id'][:8]}"
         doc_dir.mkdir(parents=True)
         try:
-            run_rmapi(["geta", "-a", paths[doc["id"]]], cwd=doc_dir)
-            pdfs = list(doc_dir.glob("*-annotations.pdf"))
-            if not pdfs:
-                raise RuntimeError("geta produced no PDF")
-            pages = render_pdf(pdfs[0], doc_dir)
+            pages, kind = fetch_and_render(paths[doc["id"]], doc_dir)
             manifest["documents"].append({
                 "id": doc["id"],
                 "name": doc["name"],
                 "path": paths[doc["id"]],
+                "kind": kind,
                 "modified": doc.get("modifiedClient"),
                 "previously_processed": state["docs"].get(doc["id"]),
                 "tags": doc.get("tags") or [],
-                "pdf": str(pdfs[0].relative_to(REPO)),
                 "pages": pages,
             })
             print(f"pulled: {paths[doc['id']]} ({len(pages)} pages)")
